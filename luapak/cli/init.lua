@@ -1,5 +1,4 @@
 #!/usr/bin/env lua
-local luapak = require 'luapak.init'
 local log = require 'luapak.logging'
 local optparse = require 'luapak.optparse'
 local utils = require 'luapak.utils'
@@ -14,11 +13,11 @@ local commands = {
 }
 
 
-local optparser = optparse([[
-luapak ${VERSION}
+local optparser = optparse [[
+${PROG_NAME} ${PROG_VERSION}
 
-Usage: ${PROGRAM} COMMAND [args]
-       ${PROGRAM} (--help | --version)
+Usage: ${PROG_NAME} COMMAND [args]
+       ${PROG_NAME} (--help | --version)
 
 Commands:
   make              Make a standalone executable for the specified Lua program. This is the main
@@ -35,9 +34,9 @@ Options:
   -v, --verbose     Be verbose, i.e. print debug messages.
   -h, --help        Display this help message and exit. Note that every command has its own --help.
   -V, --version     Display version information and exit.
-]], { VERSION = luapak._VERSION })
+]]
 
-optparser:on('--help', function (_, arglist, i)
+optparser:on({ '-h', '--help' }, function (_, arglist, i)
   if not commands[arglist[1]] then
     optparser:help()
   end

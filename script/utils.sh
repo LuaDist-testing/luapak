@@ -7,9 +7,12 @@ readonly VENV_DIR="$(pwd)/.venv"
 
 : ${TARGET_ARCH:=$(uname -m)}
 
-if [ "$HOST_OS" = Darwin ]; then
-	alias sha256sum='shasum -a 256'
-fi
+case "$HOST_OS" in
+	Darwin)
+		alias sha256sum='shasum -a 256';;
+	MINGW* | Windows)
+		alias luarocks='luarocks.bat';;
+esac
 
 einfo() {
 	# bold cyan
@@ -31,14 +34,14 @@ die() {
 
 # Prints version number based on the last git tag with prefix "v". If HEAD is
 # not tagged (i.e. this is not a release), then it prints last version with
-# suffix "-<n>-<abbrev>". If there's no tag with prefix "v" (i.e. there's no
-# release yet), it prints "0.0.0".
+# suffix "_git<n>g<abbrev>". If there's no tag with prefix "v" (i.e. there's no
+# release yet), it prints "0.0.0_git<n>g<abbrev>".
 git_based_version() {
 	# First check that we are in a git repository.
 	git rev-parse HEAD >/dev/null
 
 	{ git describe --tags --match 'v*' 2>/dev/null || echo 'v0.0.0'; } \
-		| cut -c 2-
+		| cut -c 2- | sed -E 's/\-([0-9]+)\-g([0-9a-f]+)/_git\1g\2/'
 }
 
 # Returns 0 if git HEAD is a release, i.e. it has tag with prefix "v".
@@ -47,6 +50,14 @@ is_release() {
 	git rev-parse HEAD >/dev/null
 
 	git describe --tags --exact-match --match 'v*' >/dev/null 2>&1
+}
+
+# Prints version of the specified Lua binary, or "lua" on PATH if $1 is empty.
+# This is API version, i.e. it's the same for Lua and LuaJIT.
+lua_version() {
+	local lua_path="${1:-lua}"
+
+	$lua_path -e 'print(_VERSION:sub(5))'
 }
 
 # Prints the given arguments and runs them.

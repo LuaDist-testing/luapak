@@ -3,17 +3,17 @@
 -- vim: set ft=lua:
 
 package = 'luapak'
-version = '0.1.0.beta2-1'
+version = '0.1.0.beta3-1'
 
 -- LuaDist source
 source = {
-  tag = "0.1.0.beta2-1",
+  tag = "0.1.0.beta3-1",
   url = "git://github.com/LuaDist-testing/luapak.git"
 }
 -- Original source
 -- source = {
 --   url = 'git://github.com/jirutka/luapak.git',
---   tag = 'v0.1.0.beta2',
+--   tag = 'v0.1.0.beta3',
 -- }
 
 description = {
