@@ -5,6 +5,13 @@ require 'luapak.luarocks.site_config'
 require 'luapak.luarocks.cfg_extra'
 package.loaded['luarocks.build.builtin'] = require 'luapak.build.builtin'
 
+local warn_interceptor = require 'luapak.build.warn_interceptor'
+
+for _, name in ipairs { 'cmake', 'command', 'make' } do
+  name =  'luarocks.build.'..name
+  package.loaded[name] = warn_interceptor(require(name))
+end
+
 local cfg = require 'luarocks.cfg'
 local build = require 'luarocks.build'
 local fetch = require 'luarocks.fetch'
@@ -65,7 +72,7 @@ function M.change_target_lua (api_ver, luajit_ver)
     if cfg.is_platform('macosx') then
       -- See http://luajit.org/install.html#embed.
       local ldflags = cfg.variables.LDFLAGS or ''
-      cfg.variables.LDFLAGS = '-pagezero_size 10000 -image_base 100000000 '..ldflags
+      cfg.variables.LDFLAGS = const.LUAJIT_MACOS_LDFLAGS..' '..ldflags
     end
   else
     cfg.rocks_provided.luabitop = nil

@@ -1,7 +1,7 @@
 ---------
 -- Generator of a C "wrapper" for standalone Lua programs.
 ----
-local fs = require 'luapak.fs'
+local brieflz = require 'brieflz'
 local wrapper_tmpl = require 'luapak.wrapper_tmpl'
 local utils = require 'luapak.utils'
 
@@ -10,28 +10,8 @@ local check_args = utils.check_args
 local concat = table.concat
 local fmt = string.format
 local push = table.insert
-local read_file = fs.read_file
+local remove_shebang = utils.remove_shebang
 
-
---- Returns copy of the given `script` with removed shebang.
---
--- @tparam string script
--- @treturn string
-local function remove_shebang (script)
-  return script:gsub('^#%!.-\n', '')
-end
-
---- Encodes string into hexadecimal representation formatted as a C array.
---
--- @tparam string str
--- @treturn string
-local function encode_c_hex (str)
-  local buff = {}
-  for ch in str:gmatch('.') do
-    push(buff, fmt('0x%02x', byte(ch)))
-  end
-  return '{ '..concat(buff, ', ')..' }'
-end
 
 --- Converts the module name in dot-notation into name of the corresponding
 -- C luaopen function.
@@ -42,148 +22,117 @@ local function luaopen_name (name)
   return 'luaopen_'..name:gsub('[.-]', '_')
 end
 
---- Generates definition of C function that loads and calls the given Lua module.
+--- Encodes the given data into hexadecimal representation formatted as a C array.
 --
--- @tparam string name Full name of the Lua module in dot-notation.
--- @tparam string chunk Source code or bytecode of the Lua module.
--- @treturn string
-local function define_luaopen_for_lua (name, chunk)
-  return fmt([[
-static int %s(lua_State* L) {
-  int arg = lua_gettop(L);
-  static const unsigned char chunk[] = %s;
+-- @tparam func write The writer function.
+-- @tparam string data
+local function encode_c_hex (write, data)
+  write '{\n'
 
-  if (luaL_loadbuffer(L, (const char*)chunk, sizeof(chunk), "%s")) {
-    return lua_error(L);
-  }
-  lua_insert(L, 1);
-
-  lua_call(L, arg, 1);
-  return 1;
-}
-]], luaopen_name(name), encode_c_hex(chunk), name)
-end
-
---- Generates declaration of C function for loading the specified C/Lua module.
---
--- @tparam string name Full name of the module in dot or underscore notation.
--- @treturn string
-local function declare_luaopen_func (name)
-  return fmt('int %s(lua_State *L);\n', luaopen_name(name))
-end
-
---- Generates definition of C constant `LUAPAK_PRELOADED_LIBS` of type
--- `luaL_Reg` that contains an array of preloaded modules.
---
--- @tparam {string,...} names A list of full names in dot-notation.
--- @treturn string
-local function define_preloaded_libs (names)
-  local buff = {}
-
-  push(buff, 'static const luaL_Reg LUAPAK_PRELOADED_LIBS[] = {')
-  for _, name in ipairs(names) do
-    push(buff, fmt('  { "%s", %s },', name, luaopen_name(name)))
-  end
-  push(buff, '  { NULL, NULL }\n};\n')
-
-  return concat(buff, '\n')
-end
-
---- Generates definition of C constant `LUAPAK_LUA_MAIN` with the given chunk of Lua code.
---
--- @tparam string chunk
--- @treturn string
-local function define_lua_main (chunk)
-  return fmt('static const unsigned char LUAPAK_LUA_MAIN[] = %s;\n',
-             encode_c_hex(chunk))
-end
-
---- Generates a fragment of C code that should be included in the template.
---
--- @tparam string lua_main Source code or byte code of the main script.
--- @tparam {table,...} modules A list of modules to include.
--- @treturn string A generated C code.
--- @raise if some module table doesn't have required keys or has wrong "type".
-local function generate_fragment (lua_main, modules)
-  local buffer = {}
-  local mod_names = {}
-
-  push(buffer, define_lua_main(lua_main))
-
-  for i, mod in ipairs(modules) do
-    assert(mod.name, fmt('modules[%d].name is %s', i, mod.name))
-
-    if mod.type == 'lua' then
-      assert(mod.content, fmt('modules[%d].content is %s', i, mod.content))
-      push(buffer, define_luaopen_for_lua(mod.name, mod.content))
-
-    elseif mod.type == 'native' then
-      push(buffer, declare_luaopen_func(mod.name))
-
+  local is_first = true
+  for ch in data:gmatch('.') do
+    if is_first then
+      is_first = false
     else
-      error(fmt('invalid module type: %s', mod.type))
+      write ', '
     end
-
-    push(mod_names, mod.name)
+    write(fmt('0x%02x', byte(ch)))
   end
 
-  push(buffer, define_preloaded_libs(mod_names))
+  write '\n}'
+end
 
-  return concat(buffer, '\n')
+--- Formats C `#define` directive with the specified constant.
+--
+-- @tparam function write
+-- @tparam string name The constant name.
+-- @param value The constant value.
+local function define_macro_const (write, name, value)
+  local value_t = type(value)
+
+  if value_t == 'number' or value_t == 'boolean' then
+    write(fmt('#define %s %s\n', name, value))
+  else
+    write(fmt('#define %s %q\n', name, tostring(value)))
+  end
+end
+
+--- Writes code for preloading of the specified Lua/C modules.
+--
+-- @tparam func write The writer function.
+-- @tparam {string,...} names A list of full names in dot-notation.
+local function define_preloaded_libs (write, names)
+  for _, name in ipairs(names) do
+    write(fmt('int %s(lua_State *L);\n', luaopen_name(name)))
+  end
+
+  write '\nstatic const luaL_Reg LUAPAK_PRELOADED_LIBS[] = {\n'
+  for _, name in ipairs(names) do
+    write(fmt('  { "%s", %s },\n', name, luaopen_name(name)))
+  end
+  write '  { NULL, NULL }\n};\n\n'
+end
+
+--- Writes the Lua script encoded as a C array of bytes in hexa.
+--
+-- @tparam function write
+-- @tparam string data Lua chunk or compressed Lua chunk.
+-- @tparam ?int unpacked_size Size of **uncompressed** Lua chunk.
+local function define_script (write, data, unpacked_size)
+  if unpacked_size then
+    write(fmt('static const size_t LUAPAK_SCRIPT_UNPACKED_SIZE = %d;\n', unpacked_size))
+  end
+
+  write 'static const unsigned char LUAPAK_SCRIPT[] = '
+  encode_c_hex(write, data)
+  write ';\n\n'
 end
 
 
 local M = {}
 
---- Generates source code of the C "wrapper" with the given Lua script and modules.
+--- Generates source code of the C "wrapper" with the given Lua chunk and preloaded
+-- native modules.
 --
--- **Module table:**
---
--- * `type:` `"lua"`, or `"native"`
--- * `name:` Full name of the module in dot-notation.
--- * `content:` Source code or bytecode of Lua module (only for type "lua").
---
--- @tparam string lua_main Source code or byte code of the main Lua script.
--- @tparam {table,...} modules A list of modules to be included.
--- @treturn string A source code in C.
--- @raise if some module table doesn't have required keys or has wrong "type".
-function M.generate (lua_main, modules)
-  check_args('string, table', lua_main, modules)
+-- @tparam string lua_chunk The Lua chunk (source code or byte code) to embed.
+-- @tparam ?{string,...} clib_names List of names of native modules to be preload.
+-- @tparam ?{[string]=bool,...} opts Options: `compress` - enable compression.
+-- @tparam ?function write The writer function. If not give, an intermediate table
+--   will be created and generated code returned as string.
+-- @treturn ?string A generated source code, or nil if the `write` function given.
+function M.generate (lua_chunk, clib_names, opts, write)
+  check_args('string, ?table, ?table, ?function', lua_chunk, clib_names, opts, write)
 
-  return (wrapper_tmpl:gsub('//%-%-PLACEHOLDER%-%-//',
-                            generate_fragment(lua_main, modules)))
-end
-local generate = M.generate
+  lua_chunk = remove_shebang(lua_chunk)
+  clib_names = clib_names or {}
+  opts = opts or {}
 
---- Generates source code of the C "wrapper" with the given Lua script and modules.
---
--- **Module table:**
---
--- * `type:` `"lua"`, or `"native"`
--- * `name:` Full name of the module in dot-notation.
--- * `path:` Path of the Lua module to read (required for type "lua" if `content` is not set).
--- * `content:` Source code or bytecode of the Lua module (required for type "lua"
---   if `path` is not set).
---
--- @tparam string main_file Path of the main Lua script.
--- @tparam table modules A list of modules to be included.
--- @treturn string A source code in C.
--- @raise if any path in the `modules` is unreadable or some module table doesn't have
---   required keys or has wrong "type".
-function M.generate_from_files (main_file, modules)
-  check_args('string, table', main_file, modules)
-
-  local lua_main = assert(read_file(main_file))
-  lua_main = remove_shebang(lua_main)
-
-  for _, module in pairs(modules) do
-    if module.path and not module.content then
-      local content = assert(read_file(module.path))
-      module.content = remove_shebang(content)
-    end
+  local buff
+  if not write then
+    buff = {}
+    write = function (str) push(buff, str) end
   end
 
-  return generate(lua_main, modules)
+  write(wrapper_tmpl.HEAD)
+
+  if opts.compress then
+    define_macro_const(write, 'LUAPAK_BRIEFLZ', 1)
+    define_script(write, brieflz.pack(lua_chunk))
+  else
+    define_macro_const(write, 'LUAPAK_BRIEFLZ', 0)
+    define_script(write, lua_chunk)
+  end
+
+  define_preloaded_libs(write, clib_names)
+
+  if opts.compress then
+    write(wrapper_tmpl.BRIEFLZ)
+  end
+  write(wrapper_tmpl.MAIN)
+
+  if buff then
+    return concat(buff)
+  end
 end
 
 return M

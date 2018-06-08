@@ -3,39 +3,38 @@
 -- vim: set ft=lua:
 
 package = 'luapak'
-version = '0.1.0.beta4-1'
+version = '0.1.0.beta5-1'
 
 -- LuaDist source
 source = {
-  tag = "0.1.0.beta4-1",
+  tag = "0.1.0.beta5-1",
   url = "git://github.com/LuaDist-testing/luapak.git"
 }
 -- Original source
--- source = {
---   url = 'git://github.com/jirutka/luapak.git',
---   tag = 'v0.1.0.beta4',
+-- source = { url = 'https://github.com/jirutka/luapak/archive/v0.1.0.beta5/luapak-0.1.0.beta5.tar.gz', md5 = 'b096148c15cfff3fb1daf2de52348ba3' }
+-- 
+-- description = {
+--   summary = 'Easily build a standalone executable for any Lua program.',
+--   detailed = [[
+-- This is a command-line tool that offers a complete, all-in-one (yet modular)
+-- solution for building a standalone, zero-dependencies, possibly statically
+-- linked executable for any Lua program. It automatically resolves all required
+-- dependencies using LuaRocks and static analysis of requirements across Lua
+-- sources, generates C wrapper with embedded Lua sources, compiles it and links
+-- with Lua library and native extensions.]],
+--   homepage = 'https://github.com/jirutka/luapak',
+--   maintainer = 'Jakub Jirutka <jakub@jirutka.cz>',
+--   license = 'MIT',
 -- }
-
-description = {
-  summary = 'Easily build a standalone executable for any Lua program.',
-  detailed = [[
-This is a command-line tool that offers a complete, all-in-one (yet modular)
-solution for building a standalone, zero-dependencies, possibly statically
-linked executable for any Lua program. It automatically resolves all required
-dependencies using LuaRocks and static analysis of requirements across Lua
-sources, generates C wrapper with embedded Lua sources, compiles it and links
-with Lua library and native extensions.]],
-  homepage = 'https://github.com/jirutka/luapak',
-  maintainer = 'Jakub Jirutka <jakub@jirutka.cz>',
-  license = 'MIT',
-}
 
 dependencies = {
   'lua >= 5.1',
+  'brieflz ~> 0.1.2',
   'depgraph ~> 0.1',
   'lua-glob-pattern ~> 0.2',
   'luafilesystem ~> 1.6',
   'luarocks ~> 2.4',
+  'luasrcdiet ~> 0.3',
   'optparse ~> 1.1',
 }
 
@@ -48,9 +47,12 @@ build = {
     ['luapak.build.toolchain.gnu'] = 'luapak/build/toolchain/gnu.lua',
     ['luapak.build.toolchain.msvc'] = 'luapak/build/toolchain/msvc.lua',
     ['luapak.build.toolchain.utils'] = 'luapak/build/toolchain/utils.lua',
+    ['luapak.build.warn_interceptor'] = 'luapak/build/warn_interceptor.lua',
     ['luapak.cli.analyse_deps'] = 'luapak/cli/analyse_deps.lua',
     ['luapak.cli.build_rock'] = 'luapak/cli/build_rock.lua',
     ['luapak.cli.make'] = 'luapak/cli/make.lua',
+    ['luapak.cli.merge'] = 'luapak/cli/merge.lua',
+    ['luapak.cli.minify'] = 'luapak/cli/minify.lua',
     ['luapak.cli.wrapper'] = 'luapak/cli/wrapper.lua',
     ['luapak.compat'] = 'luapak/compat.lua',
     ['luapak.deps_analyser'] = 'luapak/deps_analyser.lua',
@@ -62,6 +64,8 @@ build = {
     ['luapak.luarocks.constants'] = 'luapak/luarocks/constants.lua',
     ['luapak.luarocks.site_config'] = 'luapak/luarocks/site_config.lua',
     ['luapak.make'] = 'luapak/make.lua',
+    ['luapak.merger'] = 'luapak/merger.lua',
+    ['luapak.minifier'] = 'luapak/minifier.lua',
     ['luapak.optparse'] = 'luapak/optparse.lua',
     ['luapak.pkgpath'] = 'luapak/pkgpath.lua',
     ['luapak.utils'] = 'luapak/utils.lua',

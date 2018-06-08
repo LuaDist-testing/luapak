@@ -8,6 +8,7 @@ require 'luapak.compat'
 local fmt = string.format
 local gmatch = string.gmatch
 local insert = table.insert
+local io_type = io.type
 local pairs = pairs
 local select = select
 local sort = table.sort
@@ -56,7 +57,13 @@ end
 function M.check_args (type_specs, ...)
   local n = 1
   for spec in gmatch(type_specs, '([^, ]+)') do
-    local actual_type = type(select(n, ...) or nil)
+    local arg = select(n, ...) or nil
+
+    local actual_type = type(arg)
+    if actual_type == 'userdata' then
+      actual_type = io_type(arg) or actual_type
+    end
+
     local ok = false
 
     local nullable = sub(spec, 1, 1) == '?'
@@ -175,20 +182,6 @@ function M.is_empty (value)
   return value == nil or value == ''
 end
 
---- Returns a new table with the results of running `func(value, index)` once
--- for every item in the `list`.
---
--- @tparam function func Function that accepts at least one argument and returns a value.
--- @tparam table list The table to map over.
--- @treturn table A new table.
-function M.imap (func, list)
-  local result = {}
-  for i, item in ipairs(list) do
-    insert(result, func(item, i))
-  end
-  return result
-end
-
 --- Create an index map from the `list`. The original values become keys, and
 -- the associated values are the indices into the original `list`.
 --
@@ -286,6 +279,14 @@ function M.reject (predicate, list)
   end
 
   return result
+end
+
+--- Returns copy of the given `chunk` without shebang.
+--
+-- @tparam string chunk
+-- @treturn string
+function M.remove_shebang (chunk)
+  return (chunk:gsub('^#%!.-\n', ''))
 end
 
 --- Makes a shallow clone of the given table.

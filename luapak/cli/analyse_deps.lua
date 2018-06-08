@@ -18,9 +18,13 @@ local tableize = utils.tableize
 local help_msg = [[
 .
 Usage: ${PROG_NAME} analyse-deps [-a|-f|-m|-g] [options] FILE...
+       ${PROG_NAME} analyse-deps --help
+
+Analyses dependency graph of Lua module(s) using static code analysis (looks
+for "require" expressions).
 
 Arguments:
-  FILE                        The entry point(s); path(s) to Lua script(s) to analyze.
+  FILE                        The entry point(s); path(s) to Lua script(s) to analyse.
 
 Options:
   -a, --all                   Print all information (default).
@@ -33,14 +37,16 @@ Options:
                               (e.g. "pl.*"). Patterns may be delimited by comma or space. This
                               option can be also specified multiple times.
 
-  -p, --pkg-path=PATH         The path pattern where to search for Lua and C/Lua modules instead of
-                              the default path.
+  -n, --ignore-errors         Ignore errors from dependencies resolution (like unredable or unparseable files).
 
-  -P, --no-pcalls             Do not analyze pcall requires.
+  -P, --no-pcalls             Do not analyse pcall requires.
 
   -W, --no-wildcards          Do not expand "wildcard" requires.
 
-  -n, --ignore-errors         Ignore errors from dependencies resolution (like unredable or unparseable files).
+  -p, --pkg-path=PATH         The path pattern where to search for Lua and C/Lua modules instead of
+                              the default path.
+
+  -v, --verbose               Be verbose, i.e. print debug messages.
 
   -h, --help                  Display this help message and exit.
 ]]

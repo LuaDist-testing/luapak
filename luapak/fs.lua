@@ -20,10 +20,10 @@ local UTF8_BOM = '\239\187\191'
 local NUL_PATT = utils.LUA_VERSION == '5.1' and '%z' or '\0'
 
 local function normalize_io_error (name, err)
-   if err:sub(1, #name + 2) == name..': ' then
-      err = err:sub(#name + 3)
-   end
-   return err
+  if err:sub(1, #name + 2) == name..': ' then
+    err = err:sub(#name + 3)
+  end
+  return err
 end
 
 
@@ -114,6 +114,33 @@ function M.path_join (...)
 end
 local path_join = M.path_join
 
+--- Reads the specified file and returns its content as string.
+--
+-- @tparam string filename Path of the file to read.
+-- @tparam string mode The mode in which to open the file, see @{io.open}.
+-- @treturn[1] string A content of the file.
+-- @treturn[2] nil
+-- @treturn[2] string An error message.
+function M.read_file (filename, mode)
+  local handler, err = open(filename, mode)
+  if not handler then
+    return nil, fmt('Could not open %s: %s', filename, normalize_io_error(filename, err))
+  end
+
+  local contents, err = handler:read('*a')  --luacheck: ignore
+  if not contents then
+    return nil, fmt('Could not read %s: %s', filename, normalize_io_error(filename, err))
+  end
+
+  handler:close()
+
+  if contents:sub(1, #UTF8_BOM) == UTF8_BOM then
+    contents = contents:sub(#UTF8_BOM + 1)
+  end
+
+  return contents
+end
+
 --- Traverses all files under the specified directory recursively.
 --
 -- @tparam string dir_path Path of the directory to traverse.
@@ -142,33 +169,6 @@ function M.walk_dir (dir_path)
   return cowrap(function()
     yieldtree(dir_path)
   end)
-end
-
---- Reads the specified file and returns its content as string.
---
--- @tparam string filename Path of the file to read.
--- @tparam string mode The mode in which to open the file, see @{io.open}.
--- @treturn[1] string A content of the file.
--- @treturn[2] nil
--- @treturn[2] string An error message.
-function M.read_file (filename, mode)
-  local handler, err = open(filename, mode)
-  if not handler then
-    return nil, fmt('Could not open %s: %s', filename, normalize_io_error(filename, err))
-  end
-
-  local contents, err = handler:read('*a')  --luacheck: ignore
-  if not contents then
-    return nil, fmt('Could not read %s: %s', filename, normalize_io_error(filename, err))
-  end
-
-  handler:close()
-
-  if contents:sub(1, #UTF8_BOM) == UTF8_BOM then
-    contents = contents:sub(#UTF8_BOM + 1)
-  end
-
-  return contents
 end
 
 

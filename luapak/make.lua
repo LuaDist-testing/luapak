@@ -7,6 +7,8 @@ local log = require 'luapak.logging'
 local lua_finder = require 'luapak.lua_finder'
 local luarocks = require 'luapak.luarocks.init'
 local pkg = require 'luapak.pkgpath'
+local merger = require 'luapak.merger'
+local minifier = require 'luapak.minifier'
 local toolchain = require 'luapak.build.toolchain.init'
 local utils = require 'luapak.utils'
 local wrapper = require 'luapak.wrapper'
@@ -27,6 +29,8 @@ local luah_version = lua_finder.luah_version
 local fmt = string.format
 local last = utils.last
 local push = table.insert
+local read_file = fs.read_file
+local remove_shebang = utils.remove_shebang
 local size = utils.size
 local split = utils.split
 local unpack = table.unpack
@@ -121,8 +125,9 @@ end
 local function resolve_dependencies (entry_script, extra_modules, excludes, pkg_path)
   local entry_points = { entry_script, unpack(extra_modules or {}) }
   local lib_ext = luarocks.cfg.lib_extension
-  local modules = {}
-  local objects = {}
+  local lmods = {}
+  local cmod_names = {}
+  local cmod_paths = {}
 
   local found, missing, ignored, errors =
       deps_analyser.analyse_with_filter(entry_points, pkg_path, excludes)
@@ -143,29 +148,50 @@ local function resolve_dependencies (entry_script, extra_modules, excludes, pkg_
   for name, path in pairs(found) do
     log.debug('   %s (%s)', name, path)
 
-    local entry = { name = name }
     if ends_with('.lua', path) then
-      entry.type = 'lua'
-      entry.path = path
+      lmods[name] = path
     elseif ends_with('.'..lib_ext, path) then
-      entry.type = 'native'
-      push(objects, path)
+      push(cmod_names, name)
+      push(cmod_paths, path)
     else
       log.warn('Skipping module with unexpected file extension: %s', path)
     end
-
-    push(modules, entry)
   end
   log.debug('')
 
-  return modules, objects
+  return lmods, cmod_names, cmod_paths
 end
 
-local function generate_wrapper (output_file, entry_script, modules)
-  local fileh = assert(io.open(output_file, 'w'))
-  fileh:write(wrapper.generate_from_files(entry_script, modules))
-  fileh:flush()
-  fileh:close()
+local function init_minifier (opts)
+  local min_opts = opts.debug
+      and { keep_lno = true, keep_names = true }
+      or {}
+  local minify = minifier(min_opts)
+
+  return function (chunk, name)
+    local minified, err = minify(chunk, name)
+    if err then
+      log.warn(err)
+    end
+    return minified or chunk
+  end
+end
+
+local function generate_wrapper (output_file, entry_script, lua_modules, native_modules, opts)
+  local file = assert(io.open(output_file, 'w'))
+
+  local buff = {}
+  merger.merge_modules(lua_modules, opts.debug, function (data)
+      push(buff, data)
+    end)
+  push(buff, remove_shebang(entry_script))
+
+  wrapper.generate(concat(buff), native_modules, opts, function (...)
+      assert(file:write(...))
+    end)
+
+  assert(file:flush())
+  file:close()
 end
 
 local function build (proj_paths, entry_script, output_file, pkg_path, lua_lib, opts)
@@ -183,30 +209,41 @@ local function build (proj_paths, entry_script, output_file, pkg_path, lua_lib, 
     end
   end
 
-  luarocks.set_variable('CFLAGS', luarocks.get_variable('CFLAGS')..' -Os -std=c99')
-  local vars = luarocks.cfg.variables
-
-  local libs = { 'm' }  -- math library
-  if not luarocks.is_windows then
-    push(libs, 'dl')  -- dynamic linker library
-  end
-
   log.info('Resolving dependencies...')
-  local modules, objects = resolve_dependencies(entry_script,
-      opts.extra_modules, opts.exclude_modules, pkg_path)
+  local lua_modules, native_modules, objects = resolve_dependencies(
+      entry_script, opts.extra_modules, opts.exclude_modules, pkg_path)
   insert(objects, 1, main_obj)
   push(objects, lua_lib)
 
+  local minify
+  if opts.minify then
+    log.info('Loading and minifying Lua modules...')
+    minify = init_minifier(opts)
+  else
+    log.info('Loading Lua modules...')
+    minify = function (...) return ... end
+  end
+
+  entry_script = minify(assert(read_file(entry_script)))
+  for name, path in pairs(lua_modules) do
+    lua_modules[name] = minify(assert(read_file(path)))
+  end
+
   log.info('Generating %s...', main_src)
-  generate_wrapper(main_src, entry_script, modules)
+  generate_wrapper(main_src, entry_script, lua_modules, native_modules, opts)
+
+  luarocks.set_variable('CFLAGS', '-std=c99 '..luarocks.get_variable('CFLAGS'))
+  local vars = luarocks.cfg.variables
 
   log.info('Compiling %s...', main_obj)
   assert(toolchain.compile_object(vars, main_obj, main_src), 'Failed to compile '..main_obj)
 
   log.info('Linking %s...', output_file)
-  assert(toolchain.link_binary(vars, output_file, objects, libs),
+  assert(toolchain.link_binary(vars, output_file, objects, { 'm' }),  -- "m" is math library
          'Failed to link '..output_file)
-  assert(toolchain.strip(vars, output_file), 'Failed to strip '..output_file)
+  if not opts.debug then
+    assert(toolchain.strip(vars, output_file), 'Failed to strip '..output_file)
+  end
 
   log.info('Build completed: %s', output_file)
 

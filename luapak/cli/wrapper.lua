@@ -1,30 +1,30 @@
 ---------
 -- CLI for the wrapper module.
 ----
+local fs = require 'luapak.fs'
 local optparse = require 'luapak.optparse'
-local utils = require 'luapak.utils'
 local wrapper = require 'luapak.wrapper'
 
-local imap = utils.imap
-local split = utils.split
-local unpack = table.unpack
+local read_file = fs.read_file
 
 
 local help_msg = [[
 .
-Usage: ${PROG_NAME} wrapper [options] ENTRY_SCRIPT [MODULE...]
-       ${PROG_NAME} wrapper [-h | --help]
+Usage: ${PROG_NAME} wrapper [options] FILE [MODULE_NAME...]
+       ${PROG_NAME} wrapper --help
+
+Wraps Lua script into a generated C file that can be compiled and linked with
+Lua interpreter and Lua/C native extensions into a standalone executable.
 
 Arguments:
-  ENTRY_SCRIPT              Entry point of the wrapped program, i.e. the main Lua script.
-
-  MODULE                    Name of the native module to register (e.g. "cjson"), or name and
-                            path of the Lua module to embed into the wrapper as lazy-loaded
-                            (e.g. "luapak.utils=luapak/utils.lua").
+  FILE                        The Lua file to embed into the wrapper.
+  MODULE_NAME                 Name of native module to preload (e.g. "cjson").
 
 Options:
-  -o, --output=FILE         Where to write the generated code. Use "-" for stdout. Default is "-".
-  -h, --help                Display this help message and exit.
+  -C, --no-compress           Do not compress FILE using BriefLZ algorithm.
+  -o, --output=FILE           Where to write the generated code; "-" for stdout. Default is "-".
+  -v, --verbose               Be verbose, i.e. print debug messages.
+  -h, --help                  Display this help message and exit.
 ]]
 
 
@@ -37,23 +37,22 @@ return function (arg)
   local optparser = optparse(help_msg)
   local args, opts = optparser:parse(arg, { output = '-' })
 
-  local lua_main = table.remove(args, 1)
-  if not lua_main then
-    optparser:opterr('ENTRY_SCRIPT not specified')
+  local filename = table.remove(args, 1)
+  if not filename then
+    optparser:opterr('FILE not specified')
   end
 
-  local modules = imap(function (item)
-      local name, path = unpack(split('%=', item))
-      return path and { name = name, type = 'lua', path = path }
-                  or { name = name, type = 'native' }
-    end, args)
+  local lua_chunk = assert(read_file(filename))
+  local module_names = args
 
   local out = opts.output == '-'
       and io.stdout
       or assert(io.open(opts.output, 'w'))
 
-  local output = wrapper.generate_from_files(lua_main, modules)
+  wrapper.generate(lua_chunk, module_names,
+      { compress = not opts.no_compress },
+      function (...) assert(out:write(...)) end)
+  assert(out:flush())
 
-  assert(out:write(output))
   out:close()
 end
