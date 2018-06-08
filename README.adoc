@@ -1,0 +1,84 @@
+= Luapak
+Jakub Jirutka <https://github.com/jirutka[@jirutka]>
+:proj-name: luapak
+:gh-name: jirutka/{proj-name}
+:gh-branch: master
+:ldoc-url: https://jirutka.github.io/{proj-name}/ldoc/
+
+ifdef::env-github[]
+image:https://travis-ci.org/{gh-name}.svg?branch={gh-branch}["Build Status", link="https://travis-ci.org/{gh-name}"]
+image:https://img.shields.io/badge/ldoc-docs-blue.svg["LDoc", link="{ldoc-url}"]
+endif::env-github[]
+
+Luapak is a command-line tool that offers a complete, all-in-one (yet modular) solution for building a standalone, zero-dependencies, possibly statically linked executable for any Lua program.
+It automatically resolves all required dependencies using LuaRocks and static analysis of requirements across Lua
+sources, generates C wrapper with embedded Lua sources, compiles it and links with Lua library and native extensions.
+
+TBD
+
+
+== Installation
+
+Note: If you want to bootstrap development environment for running tests, read the next section.
+
+
+=== Using LuaRocks
+
+You can install {proj-name} using https://luarocks.org[LuaRocks] (the Lua package manager):
+
+[source, subs="+attributes"]
+luarocks install {proj-name}
+
+or to get the latest development version:
+
+[source, subs="+attributes"]
+luarocks install --server=http://luarocks.org/dev {proj-name}
+
+
+=== Download standalone binary
+
+You can also download standalone Luapak binaries built by Luapak from https://github.com/{gh-name}/releases/[Releases].
+
+Note: Linux binaries are statically linked with http://www.musl-libc.org/[musl libc], so they should work on any Linux system.
+
+
+== Set up development environment
+
+. Clone this repository:
+[source, subs="+attributes"]
+git clone https://github.com/{gh-name}.git
+cd {proj-name}
+
+. Source file `.envrc` into your shell (or manually add `$(pwd)/.venv/bin` to your `PATH`):
+[source]
+source .envrc
+
+. Install Lua and modules for running tests into directory `.venv`:
+[source]
+./script/bootstrap
+
+. Start hacking!
+
+. Run linters:
+[source]
+./script/test
+
+
+== TODO
+
+* Add support for LuaJIT into lua_finder module.
+* Write documentation into README.
+* Write integration tests.
+* Fix and test support for Windows.
+* Use AppVeyor for building standalone Luapak for Windows.
+* Add support for “squashing” Lua sources into single file that can be used as entry script.
+  ** Luapak already supports embedding multiple source files, but every file is stored separately to be lazy loaded, so it cannot be compressed as a single unit.
+* Integrate with LuaSrcDiet to strip comments etc.
+* Integrate some compression algorithm for compressing embedded Lua sources.
+* Analyse usage of Lua standard modules and exclude unused from the binary.
+
+
+== License
+
+This project is licensed under http://opensource.org/licenses/MIT/[MIT License].
+For the full text of the license, see the link:LICENSE[LICENSE] file.
