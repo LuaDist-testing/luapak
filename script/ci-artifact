@@ -14,7 +14,7 @@ cd "$(dirname "$0")/.."
 if [ -f dist/luapak ]; then
 	. script/utils.sh
 else
-	. script/build
+	. script/build-standalone
 fi
 
 einfo 'Creating build artifact'
@@ -23,6 +23,7 @@ test -f dist/luapak* || die 'dist/luapak does not exist!'
 
 case "$HOST_OS" in
 	MINGW*) target_os='windows';;
+	Darwin) target_os='macos';;
 	*) target_os=$(echo "$HOST_OS" | tr '[A-Z]' '[a-z]');;
 esac
 

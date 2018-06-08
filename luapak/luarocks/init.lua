@@ -1,7 +1,7 @@
 ---------
 -- Facade for interaction with LuaRocks.
 ----
-local site_config = require 'luapak.luarocks.site_config'
+require 'luapak.luarocks.site_config'
 require 'luapak.luarocks.cfg_extra'
 package.loaded['luarocks.build.builtin'] = require 'luapak.build.builtin'
 
@@ -11,6 +11,8 @@ local fetch = require 'luarocks.fetch'
 local fs = require 'luarocks.fs'
 local path = require 'luarocks.path'
 local util = require 'luarocks.util'
+
+local const = require 'luapak.luarocks.constants'
 
 
 local function run_in_dir (dir, func, ...)
@@ -40,6 +42,34 @@ M.is_windows = cfg.platforms.windows
 function M.build_and_install_rockspec (rockspec_file, proj_dir)
   return run_in_dir(proj_dir,
       build.build_rockspec, rockspec_file, false, true, 'one', false)
+end
+
+--- Changes the target Lua version.
+--
+-- @tparam string api_ver The Lua API version in format `x.y` (e.g. 5.1).
+-- @tparam ?string luajit_ver The LuaJIT version, or nil if target is not LuaJIT.
+function M.change_target_lua (api_ver, luajit_ver)
+  cfg.lua_version = api_ver
+  cfg.luajit_version = luajit_ver
+
+  cfg.rocks_provided.lua = api_ver..'-1'
+  if api_ver == '5.2' then
+    cfg.rocks_provided.bit32 = '5.2-1'
+  elseif api_ver == '5.3' then
+    cfg.rocks_provided.utf8 = '5.3-1'
+  end
+
+  if luajit_ver then
+    cfg.rocks_provided.luabitop = luajit_ver:gsub('%-', '')..'-1'
+
+    if cfg.is_platform('macosx') then
+      -- See http://luajit.org/install.html#embed.
+      local ldflags = cfg.variables.LDFLAGS or ''
+      cfg.variables.LDFLAGS = '-pagezero_size 10000 -image_base 100000000 '..ldflags
+    end
+  else
+    cfg.rocks_provided.luabitop = nil
+  end
 end
 
 --- Looks for the default rockspec file in the project's directory.
@@ -92,24 +122,6 @@ function M.set_link_static (enabled)
   cfg.variables.LIB_EXTENSION = cfg.lib_extension
 end
 
---- Changes the target Lua version.
---
--- @tparam string target_ver The Lua version in format `x.y`.
-function M.set_lua_version (target_ver)
-  if cfg.lua_version == target_ver then
-    return
-  end
-
-  cfg.lua_version = target_ver
-
-  cfg.rocks_provided.lua = target_ver..'-1'
-  if target_ver == '5.2' then
-    cfg.rocks_provided.bit32 = '5.2-1'
-  elseif target_ver == '5.3' then
-    cfg.rocks_provided.utf8 = '5.3-1'
-  end
-end
-
 --- Sets LuaRocks variable into `cfg.variables` table.
 function M.set_variable (name, value)
   cfg.variables[name] = value
@@ -124,7 +136,7 @@ function M.use_tree (dirname)
   dirname = fs.absolute_name(dirname)
   path.use_tree(dirname)
 
-  if prefix == old_root_dir or prefix == site_config.LUAROCKS_FAKE_PREFIX then
+  if prefix == old_root_dir or prefix == const.LUAROCKS_FAKE_PREFIX then
     cfg.variables.LUAROCKS_PREFIX = dirname
   end
 end

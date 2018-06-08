@@ -1,7 +1,7 @@
 local cfg = require 'luarocks.cfg'
 
+local const = require 'luapak.luarocks.constants'
 local fs = require 'luapak.fs'
-local site_config = require 'luapak.luarocks.site_config'
 local utils = require 'luapak.utils'
 
 local basename = fs.basename
@@ -10,11 +10,18 @@ local getenv = os.getenv
 local is_empty = utils.is_empty
 local starts_with = utils.starts_with
 
+local LUAROCKS_FAKE_PREFIX = const.LUAROCKS_FAKE_PREFIX
 local MSVC = cfg.is_platform('win32') and not cfg.is_platform('mingw32')
 
 
 -- Always use LuaFileSystem and other modules when available.
 cfg.fs_use_modules = true
+
+-- Always validate TLS certificates!
+-- Why the hack LuaRocks disables it by default?! >_<
+cfg.check_certificates = true
+cfg.variables.CURLNOCERTFLAG = ''
+cfg.variables.WGETNOCERTFLAG = ''
 
 if not is_empty(getenv('LUAROCKS_DEBUG')) then
   cfg.verbose = true
@@ -41,18 +48,28 @@ if not cfg.variables.STRIP then
   cfg.variables.STRIP = 'strip'
 end
 
+if not cfg.variables.STRINGS then
+  cfg.variables.STRINGS = 'strings'
+end
+
 -- LUALIB for MSVC is already defined in cfg.lua.
 if not cfg.variables.LUALIB and not MSVC then
   cfg.variables.LUALIB = fmt('liblua%s.%s', cfg.lua_version:gsub('%.', ''),
                                             cfg.lib_extension)
 end
 
-if cfg.is_platform('windows') then
-  local fake_prefix = site_config.LUAROCKS_FAKE_PREFIX
+if package.loaded.jit and not cfg.luajit_version then
+  cfg.luajit_version = package.loaded.jit.version:match('LuaJIT (%d+%.%d+%.%d+)')
+end
 
+if cfg.is_platform('macosx') and cfg.luajit_version then
+  cfg.variables.LDFLAGS = const.LUAJIT_MACOS_LDFLAGS
+end
+
+if cfg.is_platform('windows') then
   for name, value in pairs(cfg.variables) do
     -- Don't use bundled tools (set in luarocks.cfg).
-    if starts_with(fake_prefix, value) then
+    if starts_with(LUAROCKS_FAKE_PREFIX, value) then
       cfg.variables[name] = basename(value)
     end
 

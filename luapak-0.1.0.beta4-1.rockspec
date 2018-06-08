@@ -3,17 +3,17 @@
 -- vim: set ft=lua:
 
 package = 'luapak'
-version = '0.1.0.beta3-1'
+version = '0.1.0.beta4-1'
 
 -- LuaDist source
 source = {
-  tag = "0.1.0.beta3-1",
+  tag = "0.1.0.beta4-1",
   url = "git://github.com/LuaDist-testing/luapak.git"
 }
 -- Original source
 -- source = {
 --   url = 'git://github.com/jirutka/luapak.git',
---   tag = 'v0.1.0.beta3',
+--   tag = 'v0.1.0.beta4',
 -- }
 
 description = {
@@ -59,6 +59,7 @@ build = {
     ['luapak.lua_finder'] = 'luapak/lua_finder.lua',
     ['luapak.luarocks'] = 'luapak/luarocks/init.lua',
     ['luapak.luarocks.cfg_extra'] = 'luapak/luarocks/cfg_extra.lua',
+    ['luapak.luarocks.constants'] = 'luapak/luarocks/constants.lua',
     ['luapak.luarocks.site_config'] = 'luapak/luarocks/site_config.lua',
     ['luapak.make'] = 'luapak/make.lua',
     ['luapak.optparse'] = 'luapak/optparse.lua',
@@ -69,7 +70,7 @@ build = {
   },
   install = {
     bin = {
-      luapak = 'luapak/cli/init.lua',
+      luapak = 'bin/luapak',
     }
   }
 }
